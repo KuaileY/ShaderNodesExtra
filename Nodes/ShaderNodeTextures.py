@@ -196,8 +196,8 @@ class ShaderNodeTextures(ShaderNodeBase):
 
                         if match_rough:
                             # If Roughness nothing to to
-                            self.addLink('nodes["Roughness"].outputs[0]', 'nodes["Group Output"].inputs[3]')
                             self.delLink('nodes["Invert"].outputs[0]', 'nodes["Group Output"].inputs[3]')
+                            self.addLink('nodes["Roughness"].outputs[0]', 'nodes["Group Output"].inputs[3]')
                             bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
                             self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
 
@@ -235,11 +235,32 @@ class ShaderNodeTextures(ShaderNodeBase):
             # force_update(context)
             # return {'FINISHED'}
 
+    def update_proj(self, context):
+        proj_set = (str(self.projection_menu))
+        for node in self.node_tree.nodes:
+            if hasattr(node, 'image'):
+                node.projection = proj_set
+
+
+    def update_blend(self, context):
+        blend_set = (float(self.project_blend))
+        for node in self.node_tree.nodes:
+            if hasattr(node, 'image'):
+                node.projection_blend = blend_set
 
 
 
+
+    proj_type = [('FLAT', 'FLAT', 'FLAT'), ('BOX', 'BOX', 'BOX'), ('SPHERE', 'SPHERE', 'SPHERE'), ('TUBE', 'TUBE', 'TUBE')]
+
+    # Getting to this is a pain.
+    # proj_type = bpy.types.ShaderNodeTexImage.bl_rna.properties['projection'].enum_items
 
     filepath = StringProperty(name="Maps DIR", description="image path", subtype="FILE_PATH", update=updateFilePath)
+
+    projection_menu = bpy.props.EnumProperty(name='projection', items=proj_type, default='FLAT', update=update_proj)
+    project_blend = FloatProperty(name="blend", description="Blend", default=0.0, min=0.0, max=1.0, precision=3, subtype='PERCENTAGE', update=update_blend)
+
 
     def defaultNodeTree(self):
         self.addNode('ShaderNodeNormalMap', {'name':'Normal Map', 'inputs[0].default_value':1.000})
@@ -300,6 +321,10 @@ class ShaderNodeTextures(ShaderNodeBase):
     def draw_buttons(self, context, layout):
         col=layout.column()
         col.prop(self, 'filepath', text="Base Color")
+        layout.prop(self, 'projection_menu', text='')
+        if self.projection_menu == 'BOX':
+            layout.prop(self, 'project_blend', text='Blend:')
+
 
     #def draw_buttons_ext(self, contex, layout):
 
