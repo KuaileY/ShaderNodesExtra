@@ -1,3 +1,12 @@
+
+#
+#   Node Authors: sirmaxim, Some code from Node Wranger
+#
+#   Node Description: Texture Set Node
+#
+#   version: (0,0,1)
+#
+
 import bpy
 import os
 from glob import glob
