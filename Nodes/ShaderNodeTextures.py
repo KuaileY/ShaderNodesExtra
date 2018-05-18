@@ -26,7 +26,7 @@ class ShaderNodeTextures(ShaderNodeBase):
 #Principled suffix tags Shamelessly snagged from Node Wranger
     base_color = StringProperty(
         name='Base Color',
-        default='diffuse diff albedo base col color dif',
+        default='diffuse diff albedo base col color dif alb',
         description='Naming Components for Base Color maps')
     ambient_occlusion = StringProperty(
         name='Ambient Occlusion',
@@ -64,6 +64,9 @@ class ShaderNodeTextures(ShaderNodeBase):
         name='Displacement',
         default='displacement displace disp dsp height heightmap',
         description='Naming Components for displacement maps')
+
+    proj_items = [(t, t, t) for t in bpy.types.ShaderNodeTexImage.bl_rna.properties['projection'].enum_items.keys()]
+
 
     def updateFilePath(self, context):
         selectedfile = path.basename(self.filepath)
@@ -259,15 +262,9 @@ class ShaderNodeTextures(ShaderNodeBase):
 
 
 
-
-    proj_type = [('FLAT', 'FLAT', 'FLAT'), ('BOX', 'BOX', 'BOX'), ('SPHERE', 'SPHERE', 'SPHERE'), ('TUBE', 'TUBE', 'TUBE')]
-
-    # Getting to this is a pain.
-    # proj_type = bpy.types.ShaderNodeTexImage.bl_rna.properties['projection'].enum_items
-
     filepath = StringProperty(name="Maps DIR", description="image path", subtype="FILE_PATH", update=updateFilePath)
 
-    projection_menu = bpy.props.EnumProperty(name='projection', items=proj_type, default='FLAT', update=update_proj)
+    projection_menu = bpy.props.EnumProperty(name='projection', items=proj_items, default='FLAT', update=update_proj)
     project_blend = FloatProperty(name="blend", description="Blend", default=0.0, min=0.0, max=1.0, precision=3, subtype='PERCENTAGE', update=update_blend)
 
 
