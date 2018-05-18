@@ -69,8 +69,8 @@ class ShaderNodeTextures(ShaderNodeBase):
 
 
     def updateFilePath(self, context):
-        selectedfile = path.basename(self.filepath)
-        directory = path.dirname(self.filepath)
+        selectedfile = bpy.path.basename(self.filepath)
+        directory = os.path.dirname(bpy.path.abspath(self.filepath))
 
 
         def get_matching_imgs(selectedfile, directory):
