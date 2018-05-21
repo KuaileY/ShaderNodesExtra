@@ -54,7 +54,7 @@ class ShaderNodeTextures(ShaderNodeBase):
         description='Naming Components for bump maps')
     rough = StringProperty(
         name='Roughness',
-        default='roughness rough rgh',
+        default='roughness rough rgh rou',
         description='Naming Components for roughness maps')
     gloss = StringProperty(
         name='Gloss',
@@ -62,7 +62,7 @@ class ShaderNodeTextures(ShaderNodeBase):
         description='Naming Components for glossy maps')
     displacement = StringProperty(
         name='Displacement',
-        default='displacement displace disp dsp height heightmap',
+        default='displacement displace disp dsp height heightmap dis',
         description='Naming Components for displacement maps')
 
     proj_items = [(t, t, t) for t in bpy.types.ShaderNodeTexImage.bl_rna.properties['projection'].enum_items.keys()]
@@ -87,8 +87,14 @@ class ShaderNodeTextures(ShaderNodeBase):
             return files
 
         if selectedfile != self.bl_label:
-            # print(selectedfile + ' not equal label of ' + self.bl_label) #debug
             files = get_matching_imgs(selectedfile, directory)
+            for node in self.node_tree.nodes:
+                self.delNode(node)
+            self.addNode('NodeGroupInput', {'name':'Group Input'})
+            self.addNode('NodeGroupOutput', {'name':'Group Output'})
+
+
+
             # for i in files: #debug
             #     print(i)
 
@@ -120,7 +126,7 @@ class ShaderNodeTextures(ShaderNodeBase):
             rough_abbr = tags.rough.split(' ')
             socketnames = [
             ['Displacement', tags.displacement.split(' '), None],
-            ['Base Color', tags.base_color.split(' '), None],
+            # ['Base Color', tags.base_color.split(' '), None],
             ['AO', tags.ambient_occlusion.split(' '), None], #not in NW
             ['Subsurface Color', tags.sss_color.split(' '), None],
             ['Metallic', tags.metallic.split(' '), None],
@@ -168,73 +174,110 @@ class ShaderNodeTextures(ShaderNodeBase):
 
                 # DISPLACEMENT NODES
                 if sname[0] == 'Displacement':
+                    self.addNode('ShaderNodeTexImage', {'name':'Displacement', 'color_space':'NONE'})
+                    self.addNode('ShaderNodeMath', {'name':'Displace Offset', 'operation':'SUBTRACT', 'use_clamp':0.000})
+                    self.addNode('ShaderNodeMath', {'name':'Displace Strength', 'operation':'MULTIPLY', 'use_clamp':0.000})
+                    self.addLink('nodes["Group Input"].outputs[0]', 'nodes["Displacement"].inputs[0]')
+                    self.addLink('nodes["Displacement"].outputs[0]', 'nodes["Displace Offset"].inputs[0]')
+                    self.addLink('nodes["Group Input"].outputs[1]', 'nodes["Displace Offset"].inputs[1]')
+                    self.addLink('nodes["Displace Offset"].outputs[0]', 'nodes["Displace Strength"].inputs[0]')
+                    self.addLink('nodes["Displace Strength"].outputs[0]', 'nodes["Group Output"].inputs[6]')
+                    self.addLink('nodes["Group Input"].outputs[2]', 'nodes["Displace Strength"].inputs[1]')
                     bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
                     self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
 
 
-                    continue
+
+                # NORMAL NODES
+                elif sname[0] == 'Normal':
+                    # Test if new texture node is normal or bump map
+                    fname_components = split_into__components(sname[2])
+                    match_normal = set(normal_abbr).intersection(set(fname_components))
+                    match_bump = set(bump_abbr).intersection(set(fname_components))
+                    if match_normal:
+                        # If Normal add normal node in between
+                        self.addNode('ShaderNodeTexImage', {'name':'Normal', 'color_space':'NONE'})
+                        self.addNode('ShaderNodeNormalMap', {'name':'Normal Map', 'inputs[0].default_value':1.000})
+                        self.addLink('nodes["Normal"].outputs[0]', 'nodes["Normal Map"].inputs[1]')
+                        self.addLink('nodes["Group Input"].outputs[0]', 'nodes["Normal"].inputs[0]')
+                        self.addLink('nodes["Normal Map"].outputs[0]', 'nodes["Group Output"].inputs[5]')
+                        bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
+                        self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
+
+                    elif match_bump:
+                        # If Bump add bump node in between
+                        self.addNode('ShaderNodeTexImage', {'name':'Normal', 'color_space':'NONE'})
+                        self.addNode('ShaderNodeBump', {'name':'Bump'})
+                        self.addLink('nodes["Normal"].outputs[0]', 'nodes["Bump"].inputs[2]')
+                        self.addLink('nodes["Bump"].outputs[0]', 'nodes["Group Output"].inputs[5]')
+                        bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
+                        self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
 
 
 
-                    # NORMAL NODES
-                    if sname[0] == 'Normal':
-                        # Test if new texture node is normal or bump map
-                        fname_components = split_into__components(sname[2])
-                        match_normal = set(normal_abbr).intersection(set(fname_components))
-                        match_bump = set(bump_abbr).intersection(set(fname_components))
-                        if match_normal:
-                            # If Normal add normal node in between
-                            self.delLink('nodes["Bump"].outputs[0]', 'nodes["Group Output"].inputs[4]')
-                            self.addLink('nodes["Normal"].outputs[0]', 'nodes["Group Output"].inputs[4]')
-                            bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
-                            self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
+                elif sname[0] == 'Roughness':
+                    # Test if glossy or roughness map
+                    fname_components = split_into__components(sname[2])
+                    match_rough = set(rough_abbr).intersection(set(fname_components))
+                    match_gloss = set(gloss_abbr).intersection(set(fname_components))
 
-                        elif match_bump:
-                            # If Bump add bump node in between
-                            self.delLink('nodes["Normal Map"].outputs[0]', 'nodes["Group Output"].inputs[4]')
-                            self.addLink('nodes["Bump"].outputs[0]', 'nodes["Group Output"].inputs[4]')
-                            bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
-                            self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
+                    if match_rough:
+                        # If Roughness nothing to to
+                        self.addNode('ShaderNodeTexImage', {'name':'Roughness', 'color_space':'NONE'})
+                        self.addLink('nodes["Group Input"].outputs[0]', 'nodes["Roughness"].inputs[0]')
+                        self.addLink('nodes["Roughness"].outputs[0]', 'nodes["Group Output"].inputs[4]')
+                        bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
+                        self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
 
-                        else:
-                            continue
+                    elif match_gloss:
+                        # If Gloss Map add invert node
+                        self.addNode('ShaderNodeTexImage', {'name':'Roughness', 'color_space':'NONE'})
+                        self.addNode('ShaderNodeInvert', {'name':'Invert'})
+                        self.addLink('nodes["Group Input"].outputs[0]', 'nodes["Roughness"].inputs[0]')
+                        self.addLink('nodes["Roughness"].outputs[0]', 'nodes["Invert"].inputs[1]')
+                        self.addLink('nodes["Invert"].outputs[0]', 'nodes["Group Output"].inputs[4]')
+                        bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
+                        self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
 
+                elif sname[0] == 'Metallic':
+                    self.addNode('ShaderNodeTexImage', {'name':'Metallic', 'color_space':'NONE'})
+                    self.addLink('nodes["Metallic"].outputs[0]', 'nodes["Group Output"].inputs[3]')
+                    self.addLink('nodes["Group Input"].outputs[0]', 'nodes["Metallic"].inputs[0]')
+                    bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
+                    self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
 
-                    elif sname[0] == 'Roughness':
-                        # Test if glossy or roughness map
-                        fname_components = split_into__components(sname[2])
-                        match_rough = set(rough_abbr).intersection(set(fname_components))
-                        match_gloss = set(gloss_abbr).intersection(set(fname_components))
+                elif sname[0] == 'AO':
+                    self.addNode('ShaderNodeTexImage', {'name':'AO'})
+                    self.addLink('nodes["Group Input"].outputs[0]', 'nodes["AO"].inputs[0]')
+                    self.addLink('nodes["AO"].outputs[0]', 'nodes["Group Output"].inputs[1]')
+                    bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
+                    self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
 
-                        if match_rough:
-                            # If Roughness nothing to to
-                            self.delLink('nodes["Invert"].outputs[0]', 'nodes["Group Output"].inputs[3]')
-                            self.addLink('nodes["Roughness"].outputs[0]', 'nodes["Group Output"].inputs[3]')
-                            bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
-                            self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
-
-                        elif match_gloss:
-                            # If Gloss Map add invert node
-                            self.delLink('nodes["Roughness"].outputs[0]', 'nodes["Group Output"].inputs[3]')
-                            self.addLink('nodes["Invert"].outputs[0]', 'nodes["Group Output"].inputs[3]')
-                            bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
-                            self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
-
-                    else:
-                        # This is a simple connection Texture --> Input slot
-                        continue
-
+                elif sname[0] == 'Subsurface Color':
+                    self.addNode('ShaderNodeTexImage', {'name':'Subsurface Color'})
+                    self.addLink('nodes["Group Input"].outputs[0]', 'nodes["Subsurface Color"].inputs[0]')
+                    self.addLink('nodes["Subsurface Color"].outputs[0]', 'nodes["Group Output"].inputs[2]')
+                    bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
+                    self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
 
                 else:
-                    bpy.data.images.load(directory+os.sep+sname[2], check_existing=True)
-                    self.node_tree.nodes[sname[0]].image = bpy.data.images[sname[2]]
+
                     continue
+
+            self.addNode('ShaderNodeTexImage', {'name':'Base Color'})
+            self.addLink('nodes["Group Input"].outputs[0]', 'nodes["Base Color"].inputs[0]')
+            self.addLink('nodes["Base Color"].outputs[0]', 'nodes["Group Output"].inputs[0]')
+            bpy.data.images.load(directory+os.sep+selectedfile, check_existing=True)
+            self.node_tree.nodes['Base Color'].image = bpy.data.images[selectedfile]
+
+            self.update_proj(self)
+            self.update_blend(self)
 
                 # This are all connected texture nodes
                 # texture_nodes.append(texture_node)
                 # texture_node.label = sname[0]
 
-            # if disp_texture:
+
             #     texture_nodes.append(disp_texture)
 
             # for texture_node in texture_nodes:
@@ -269,45 +312,17 @@ class ShaderNodeTextures(ShaderNodeBase):
 
 
     def defaultNodeTree(self):
-        self.addNode('ShaderNodeNormalMap', {'name':'Normal Map', 'inputs[0].default_value':1.000})
-        self.addNode('ShaderNodeTexImage', {'name':'AO'})
-        self.addNode('ShaderNodeTexImage', {'name':'Roughness', 'color_space':'NONE'})
-        self.addNode('ShaderNodeTexImage', {'name':'Metallic', 'color_space':'NONE'})
-        self.addNode('ShaderNodeTexImage', {'name':'Normal', 'color_space':'NONE'})
-        self.addNode('ShaderNodeTexImage', {'name':'Displacement', 'color_space':'NONE'})
-        self.addNode('ShaderNodeMath', {'name':'Displace Offset', 'operation':'SUBTRACT', 'use_clamp':0.000})
-        self.addNode('ShaderNodeMath', {'name':'Displace Strength', 'operation':'MULTIPLY', 'use_clamp':0.000})
-        self.addNode('ShaderNodeTexImage', {'name':'Base Color'})
-        self.addNode('ShaderNodeBump', {'name':'Bump'})
-        self.addNode('ShaderNodeInvert', {'name':'Invert'})
         self.addInput('NodeSocketVector', {'name':'Vector', 'default_value':[0.000,0.000,0.000], 'min_value':0.000, 'max_value':1.000})
         self.addInput('NodeSocketFloat', {'name':'Displace Offset', 'default_value':0.500, 'min_value':-10000.000, 'max_value':10000.000})
         self.addInput('NodeSocketFloat', {'name':'Displace Strength', 'default_value':1.000, 'min_value':-10000.000, 'max_value':10000.000})
         self.addOutput('NodeSocketColor', {'name':'Base Color', 'default_value':[0.000,0.000,0.000,0.000]})
         self.addOutput('NodeSocketColor', {'name':'AO', 'default_value':[0.000,0.000,0.000,0.000]})
+        self.addOutput('NodeSocketColor', {'name':'Subsurface Color', 'default_value':[0.000,0.000,0.000,0.000]})
         self.addOutput('NodeSocketColor', {'name':'Metallic', 'default_value':[0.000,0.000,0.000,0.000]})
         self.addOutput('NodeSocketColor', {'name':'Roughness', 'default_value':[0.000,0.000,0.000,0.000]})
         self.addOutput('NodeSocketVector', {'name':'Normal', 'default_value':[0.000,0.000,0.000], 'min_value':0.000, 'max_value':1.000})
         self.addOutput('NodeSocketFloat', {'name':'Displacement', 'default_value':0.000, 'min_value':0.000, 'max_value':0.000})
-        self.addLink('nodes["Group Input"].outputs[0]', 'nodes["Base Color"].inputs[0]')
-        self.addLink('nodes["Roughness"].outputs[0]', 'nodes["Group Output"].inputs[3]')
-        self.addLink('nodes["Roughness"].outputs[0]', 'nodes["Invert"].inputs[1]')
-        self.addLink('nodes["Metallic"].outputs[0]', 'nodes["Group Output"].inputs[2]')
-        self.addLink('nodes["Group Input"].outputs[0]', 'nodes["Metallic"].inputs[0]')
-        self.addLink('nodes["Group Input"].outputs[0]', 'nodes["Roughness"].inputs[0]')
-        self.addLink('nodes["Group Input"].outputs[0]', 'nodes["Displacement"].inputs[0]')
-        self.addLink('nodes["Group Input"].outputs[0]', 'nodes["Normal"].inputs[0]')
-        self.addLink('nodes["Group Input"].outputs[0]', 'nodes["AO"].inputs[0]')
-        self.addLink('nodes["Normal"].outputs[0]', 'nodes["Normal Map"].inputs[1]')
-        self.addLink('nodes["Normal"].outputs[0]', 'nodes["Bump"].inputs[2]')
-        self.addLink('nodes["Normal Map"].outputs[0]', 'nodes["Group Output"].inputs[4]')
-        self.addLink('nodes["Base Color"].outputs[0]', 'nodes["Group Output"].inputs[0]')
-        self.addLink('nodes["AO"].outputs[0]', 'nodes["Group Output"].inputs[1]')
-        self.addLink('nodes["Displacement"].outputs[0]', 'nodes["Displace Offset"].inputs[0]')
-        self.addLink('nodes["Group Input"].outputs[1]', 'nodes["Displace Offset"].inputs[1]')
-        self.addLink('nodes["Displace Offset"].outputs[0]', 'nodes["Displace Strength"].inputs[0]')
-        self.addLink('nodes["Displace Strength"].outputs[0]', 'nodes["Group Output"].inputs[5]')
-        self.addLink('nodes["Group Input"].outputs[2]', 'nodes["Displace Strength"].inputs[1]')
+
 
     def init(self, context):
         self.width = 220
